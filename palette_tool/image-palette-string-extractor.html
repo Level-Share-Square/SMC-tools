@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image and Map Color Extractor</title>
+  </head>
+  <body>
+    <h1>SMC Image Palette String Extractor</h1>
+    This tool is used to generate palette strings for the implementation of
+    tilesets, backgrounds, etc. in Super Mario Construct.<br />
+    Palette strings in the source code can be found inside of the JSON files
+    within <u>"SMC-game/files/Palettes"</u>.<br />
+    <h2>Select an upload type</h2>
+    <button id="imageUploadButton">Extract from image</button>
+    <button id="mapUploadButton">Extract in bulk from folder</button
+    ><br /><br />
+
+    <div id="uploadContainer">
+      <input
+        type="file"
+        id="fileInput"
+        accept="image/*"
+        multiple=""
+        style="display: none"
+      />
+    </div>
+
+    <label for="disableCoordReference">
+      <h2>Configure & run</h2>
+
+      The first image is always used as a reference for the coordinates of the
+      colours. Making sure ALL images have the same amount of RGB values in
+      their part of the string.<br />
+      If you don't want this, then you can disable it with the checkbox below
+      (not recommended), though you will most likely have to do manual changes
+      afterwards. <br />
+      Use this if other palettes have MORE colors than the base.
+      <br /><input type="checkbox" id="disableCoordReference" /><b
+        >Disable coordinate reference</b
+      ></label
+    ><br /><br />
+
+    <button id="runButton" style="display: block">
+      Generate palette string</button
+    ><br /><br />
+    <textarea
+      id="outputField"
+      rows="10"
+      cols="80"
+      readonly=""
+      style="display: none"
+    ></textarea>
+    <br />
+    <button onclick="copyToClipboard()">Copy</button>
+
+    <script>
+      const fileInput = document.getElementById("fileInput");
+      const runButton = document.getElementById("runButton");
+      const uploadContainer = document.getElementById("uploadContainer");
+      const imageUploadButton = document.getElementById("imageUploadButton");
+      const mapUploadButton = document.getElementById("mapUploadButton");
+      let selectedFiles = [];
+      let currentTab = "";
+
+      const copyToClipboard = () => {
+        navigator.clipboard.writeText(
+          document.getElementById("outputField").value
+        );
+      };
+
+      imageUploadButton.addEventListener("click", () => {
+        if (currentTab !== "image") {
+          currentTab = "image"; // Update the current tab
+          setFileInput("image/*", false);
+          fileInput.value = ""; // Clear the visual display of selected files
+          imageUploadButton.disabled = true;
+          mapUploadButton.disabled = false;
+        }
+      });
+
+      mapUploadButton.addEventListener("click", () => {
+        if (currentTab !== "map") {
+          currentTab = "map"; // Update the current tab
+          setFileInput("", true);
+          fileInput.value = ""; // Clear the visual display of selected files
+          imageUploadButton.disabled = false;
+          mapUploadButton.disabled = true;
+        }
+      });
+
+      function setFileInput(acceptType, isFolder) {
+        fileInput.style.display = "block";
+        fileInput.setAttribute("accept", acceptType);
+        if (isFolder) {
+          fileInput.setAttribute("webkitdirectory", "");
+        } else {
+          fileInput.removeAttribute("webkitdirectory");
+        }
+        runButton.style.display = "block"; // Show the run button after selection mode is chosen
+      }
+
+      fileInput.addEventListener("change", (event) => {
+        selectedFiles = Array.from(event.target.files);
+      });
+
+      runButton.addEventListener("click", () => {
+        if (selectedFiles.length === 0) {
+          alert("Please select files first.");
+          return;
+        }
+        handleFiles(selectedFiles);
+      });
+
+      function handleFiles(files) {
+        const disableCoordReference = document.getElementById(
+          "disableCoordReference"
+        ).checked;
+        const outputField = document.getElementById("outputField");
+        let outputString = "";
+        let referenceCoordinates = [];
+
+        files.forEach((file, fileIndex) => {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const img = new Image();
+            img.src = e.target.result;
+
+            img.onload = function () {
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d");
+              canvas.width = img.width;
+              canvas.height = img.height;
+              ctx.drawImage(img, 0, 0);
+
+              const imageData = ctx.getImageData(
+                0,
+                0,
+                canvas.width,
+                canvas.height
+              );
+              const { data, width, height } = imageData;
+              const colorMap = new Map();
+
+              if (
+                referenceCoordinates.length > 0 &&
+                !disableCoordReference &&
+                fileIndex > 0
+              ) {
+                referenceCoordinates.forEach(({ x, y }) => {
+                  const index = (y * width + x) * 4;
+                  const r = data[index],
+                    g = data[index + 1],
+                    b = data[index + 2],
+                    a = data[index + 3];
+
+                  if (a === 0) return; // Skip transparent pixels
+
+                  const rgbString = `${r},${g},${b}`;
+                  outputString += `${rgbString} | `;
+                });
+                outputField.value = `"${outputString.slice(0, -3)}"`;
+                outputField.style.display = "block";
+                return;
+              }
+
+              for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                  const index = (y * width + x) * 4;
+                  const r = data[index],
+                    g = data[index + 1],
+                    b = data[index + 2],
+                    a = data[index + 3];
+
+                  if (a === 0) continue; // Skip transparent pixels
+
+                  const rgbString = `${r},${g},${b}`;
+                  if (!colorMap.has(rgbString)) {
+                    colorMap.set(rgbString, { r, g, b });
+                    referenceCoordinates.push({ x, y });
+                  }
+                }
+              }
+
+              let key = 1;
+              const mapSize = colorMap.size;
+              colorMap.forEach((rgb) => {
+                const endSymbol = mapSize !== key ? " | " : " -- ";
+                outputString += `${rgb.r},${rgb.g},${rgb.b}${endSymbol}`;
+                key++;
+              });
+
+              if (fileIndex === files.length - 1) {
+                outputField.value = outputString.slice(0, -4) + " -- "; // Remove trailing symbols
+                outputField.style.display = "block";
+              }
+            };
+          };
+
+          reader.readAsDataURL(file);
+        });
+      }
+    </script>
+  </body>
+</html>
