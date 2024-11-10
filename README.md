@@ -1,11 +1,10 @@
 # Super Mario Construct developer tools
 
-This is a collection of tools to help you develop the game, focussing on usage with and without a construct 3 license.
+This repository contains web versions (.html) and/or a nodejs versions (.js) for various tools used for development of Super Mario Construct, focusing on usage with and without ownership of a construct 3 license.
 Provided scripts are developed by MrGerund (The Flying Dutchman) and published by Level Share Square.
 
 ## Usage
 
-This repository contains both a web version (.html) and a nodejs version (.js) for the tools.
 Nodejs versions require installation of nodejs and npm, with the required packages installed.
 The web version can be opened in a browser directly and will also be hosted on the Level Share Square website during its lifetime.
 

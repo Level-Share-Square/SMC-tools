@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tile Layout Visualizer</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+      }
+
+      h1 {
+        text-align: center;
+        color: #2c3e50;
+      }
+
+      h2 {
+        color: #3498db;
+        margin-bottom: 10px;
+      }
+
+      input[type="file"],
+      input[type="number"] {
+        padding: 8px;
+        margin: 10px 0;
+        width: 100%;
+        max-width: 300px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
+
+      input[type="file"] {
+        padding: 5px;
+      }
+
+      button {
+        padding: 10px 15px;
+        background-color: #2ecc71;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        width: 100%;
+        max-width: 200px;
+        margin-top: 20px;
+      }
+
+      button:hover {
+        background-color: #27ae60;
+      }
+
+      #canvas {
+        display: block;
+        margin: 20px auto;
+        border: 1px solid #ccc;
+        background-color: white;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+      }
+
+      a {
+        color: #3498db;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+
+      .input-group {
+        margin-bottom: 20px;
+      }
+
+      .input-group p {
+        margin-bottom: 5px;
+        font-size: 14px;
+        color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Tile Layout Visualizer</h1>
+    <div class="container">
+      <p>
+        This tool is used to visualize the position of tileset components in the
+        editor. Start with inputting your files to generate an array for easier
+        readability, which can then be used to output a new JSON file.
+      </p>
+
+      <h2>Input a JSON</h2>
+      <p>
+        This can be either <u>files\Tile layouts\TileLayouts_SMAS1.json</u> or
+        <u>files\Tile layouts\TileLayouts_SMW.json</u> depending on the
+        gamestyle you're adding a tileset for.
+      </p>
+      <div class="input-group">
+        <input type="file" id="fileInput" accept=".json" />
+      </div>
+
+      <h2>Input your spritesheet</h2>
+      <p>
+        Spritesheet must be a grid of 16x16 pixels with a height and width
+        consisting of multiples of 16. (example: 160 width by 256 height)
+      </p>
+      <div class="input-group">
+        <input type="file" id="spriteInput" accept=".png" />
+      </div>
+
+      <h2>JSON index</h2>
+      <p>
+        This is the index of your spritesheet within the JSON file,
+        corresponding to the first value for your tileset in
+        <u>eventSheets\Toolbar menus\Tilesets menu.json</u>.
+      </p>
+      <div class="input-group">
+        <input type="number" id="indexInput" />
+      </div>
+
+      <button id="submit">Visualize</button>
+
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <script>
+      document.getElementById("submit").addEventListener("click", visualize);
+
+      function visualize() {
+        // Get input elements
+        const fileInput = document.getElementById("fileInput");
+        const spriteInput = document.getElementById("spriteInput");
+        const indexInput = document.getElementById("indexInput");
+
+        const jsonFile = fileInput.files[0];
+        const spriteFile = spriteInput.files[0];
+        const index = parseInt(indexInput.value, 10);
+
+        if (!jsonFile || !spriteFile) {
+          alert("Please upload both the JSON file and the spritesheet.");
+          return;
+        }
+
+        // Check if the sprite image dimensions are multiples of 16
+        const img = new Image();
+        img.onload = function () {
+          if (img.width % 16 !== 0 || img.height % 16 !== 0) {
+            alert("Spritesheet dimensions must be multiples of 16.");
+            return;
+          }
+
+          // Parse the JSON file
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const jsonData = JSON.parse(e.target.result);
+            console.log(jsonData); // Do something with the JSON data
+
+            // Do something with the index (to be used later)
+            console.log("Index input:", index);
+          };
+          reader.readAsText(jsonFile);
+        };
+
+        img.src = URL.createObjectURL(spriteFile);
+      }
+    </script>
+  </body>
+</html>
