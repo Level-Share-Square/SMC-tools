@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tile Layout Visualizer</title>
     <style>
@@ -39,7 +39,6 @@
 
       button {
         padding: 10px 15px;
-        background-color: #2ecc71;
         color: white;
         border: none;
         border-radius: 5px;
@@ -48,10 +47,26 @@
         width: 100%;
         max-width: 200px;
         margin-top: 20px;
+        transition: background-color 0.5s ease, color 0.5s ease;
       }
 
-      button:hover {
+      #submit {
+        background-color: #2ecc71;
+      }
+      #submit:hover {
         background-color: #27ae60;
+      }
+      #reload {
+        background-color: #fd4ea8;
+      }
+
+      #reload:hover {
+        background-color: #ff309b;
+      }
+
+      button:disabled {
+        background-color: #bdc3c7 !important;
+        cursor: not-allowed;
       }
 
       #canvas {
@@ -60,6 +75,18 @@
         border: 1px solid #ccc;
         background-color: white;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+
+      textarea {
+        display: block;
+        margin: 20px auto;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 16px;
+        width: 95%;
+        resize: none;
+        height: 400px;
       }
 
       .container {
@@ -93,6 +120,22 @@
         font-size: 14px;
         color: #555;
       }
+
+      .notification {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #2ecc71;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-size: 16px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.35s ease-in-out;
+        z-index: 9999;
+      }
     </style>
   </head>
   <body>
@@ -111,7 +154,12 @@
         gamestyle you're adding a tileset for.
       </p>
       <div class="input-group">
-        <input type="file" id="fileInput" accept=".json" />
+        <input
+          type="file"
+          id="jsonInput"
+          accept=".json"
+          onchange="document.getElementById(`reload`).disabled = false"
+        />
       </div>
 
       <h2>Input your spritesheet</h2>
@@ -120,7 +168,12 @@
         consisting of multiples of 16. (example: 160 width by 256 height)
       </p>
       <div class="input-group">
-        <input type="file" id="spriteInput" accept=".png" />
+        <input
+          type="file"
+          id="spriteInput"
+          accept=".png"
+          onchange="document.getElementById(`reload`).disabled = false"
+        />
       </div>
 
       <h2>JSON index</h2>
@@ -130,54 +183,413 @@
         <u>eventSheets\Toolbar menus\Tilesets menu.json</u>.
       </p>
       <div class="input-group">
-        <input type="number" id="indexInput" />
+        <input type="number" id="indexInput" value="1" />
       </div>
 
-      <button id="submit">Visualize</button>
+      <div style="display: flex; justify-content: space-between">
+        <button id="submit" onclick="visualize()">Visualize</button>
+        <button id="reload" onclick="loadPrevious()">
+          Load previous inputs
+        </button>
+      </div>
 
-      <canvas id="canvas"></canvas>
+      <div id="output" style="display: none">
+        <canvas id="canvas"></canvas>
+        <div style="display: flex; justify-content: center; gap: 10px">
+          <button
+            style="background-color: green"
+            onclick="toggleMarkings(this)"
+          >
+            Toggle markings
+          </button>
+          <button
+            onclick="changeMarkingColor(this)"
+            style="background-color: lime; color: black"
+          >
+            Change marking color
+          </button>
+        </div>
+        <textarea id="jsonValues"></textarea>
+      </div>
     </div>
 
     <script>
-      document.getElementById("submit").addEventListener("click", visualize);
+      let showMarkings = true;
+      let loadedImage = null;
+      let loadedJsonData = null;
+      let loadedIndex = null;
+      let currentColor = "lime";
+      // Open IndexedDB
+      const openDB = () => {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open("TileLayoutDB", 1);
 
-      function visualize() {
-        // Get input elements
-        const fileInput = document.getElementById("fileInput");
-        const spriteInput = document.getElementById("spriteInput");
-        const indexInput = document.getElementById("indexInput");
+          request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains("tiles")) {
+              // Create the object store only if it doesn't already exist
+              const store = db.createObjectStore("tiles", {
+                keyPath: "customKey",
+                autoIncrement: false,
+              });
+            }
+          };
 
-        const jsonFile = fileInput.files[0];
-        const spriteFile = spriteInput.files[0];
-        const index = parseInt(indexInput.value, 10);
+          request.onsuccess = (e) => resolve(e.target.result);
+          request.onerror = (e) => reject(e.target.error);
+        });
+      };
 
+      // Store data in IndexedDB
+      const storeData = (jsonFile, spriteFile, indexValue) => {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open("TileLayoutDB", 1);
+
+          request.onupgradeneeded = function (event) {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains("tiles")) {
+              const store = db.createObjectStore("tiles", {
+                keyPath: "customKey",
+                autoIncrement: false,
+              });
+            }
+          };
+
+          request.onerror = function () {
+            reject("Failed to open IndexedDB.");
+          };
+
+          request.onsuccess = async (event) => {
+            const db = event.target.result;
+            const tx = db.transaction("tiles", "readwrite");
+            const store = tx.objectStore("tiles");
+
+            const record = {
+              json: jsonFile,
+              sprite: spriteFile,
+              customKey: `index_1`,
+              index: indexValue,
+            };
+            await store.clear();
+            const addRequest = store.put(record);
+
+            // Resolves the returned Promise with the string "Data successfully stored in IndexedDB."
+            addRequest.onsuccess = function () {
+              resolve("Data successfully stored in IndexedDB.");
+            };
+
+            addRequest.onerror = function () {
+              reject("Failed to store data in IndexedDB.");
+            };
+
+            tx.oncomplete = function () {
+              db.close();
+            };
+          };
+        });
+      };
+
+      // Retrieve data from IndexedDB
+      const loadPrevious = async () => {
+        const db = await openDB();
+        const tx = db.transaction("tiles", "readonly");
+        const store = tx.objectStore("tiles");
+
+        return new Promise((resolve, reject) => {
+          // Get the record with id = 1
+          const request = store.get("index_1"); // Get the first (and only) record
+          document.getElementById("reload").disabled = true;
+
+          // Handle success
+          request.onsuccess = () => {
+            const record = request.result;
+            if (record) {
+              const jsonFile = new File([record.json], record.json.name, {
+                type: "application/json",
+              });
+              const spriteFile = new File([record.sprite], record.sprite.name, {
+                type: "image/png",
+              });
+
+              // Set the file inputs to the saved data
+              document.getElementById("jsonInput").files = new FileListItem([
+                jsonFile,
+              ]);
+              document.getElementById("spriteInput").files = new FileListItem([
+                spriteFile,
+              ]);
+              document.getElementById("indexInput").value = record.index;
+              showNotification("Previous data loaded.");
+
+              resolve(visualize()); // Resolve the promise after successfully loading the record
+            } else {
+              showNotification("No previous data found.");
+              reject(new Error("No record found"));
+            }
+          };
+
+          // Handle error
+          request.onerror = (e) => {
+            reject(e.target.error); // Reject if there's an error fetching the record
+          };
+        });
+      };
+
+      // Helper function to simulate FileList (for loading previous files)
+      function FileListItem(files) {
+        const b = new ClipboardEvent("").clipboardData || new DataTransfer();
+        files.forEach((file) => b.items.add(file));
+        return b.files;
+      }
+
+      // Function to visualize
+      const visualize = async () => {
+        // Get input values
+        const jsonFile = document.getElementById("jsonInput").files[0];
+        const indexValue = parseInt(
+          document.getElementById("indexInput").value,
+          10
+        );
+        const spriteFile = document.getElementById("spriteInput").files[0];
+
+        // Check conditions
         if (!jsonFile || !spriteFile) {
-          alert("Please upload both the JSON file and the spritesheet.");
+          showNotification(
+            "Please provide both a JSON file and a sprite sheet."
+          );
           return;
         }
 
-        // Check if the sprite image dimensions are multiples of 16
-        const img = new Image();
-        img.onload = function () {
-          if (img.width % 16 !== 0 || img.height % 16 !== 0) {
-            alert("Spritesheet dimensions must be multiples of 16.");
+        // Check if index is valid
+        if (indexValue < 1) {
+          showNotification("Index must be a minimum of 1.");
+          return;
+        }
+
+        // Read JSON
+        const reader = new FileReader();
+        reader.onload = async function (event) {
+          const jsonData = JSON.parse(event.target.result);
+
+          // Validate JSON size
+          if (jsonData.size && jsonData.size[2] < indexValue) {
+            showNotification("The index exceeds the size of the JSON data.");
             return;
           }
 
-          // Parse the JSON file
-          const reader = new FileReader();
-          reader.onload = function (e) {
-            const jsonData = JSON.parse(e.target.result);
-            console.log(jsonData); // Do something with the JSON data
-
-            // Do something with the index (to be used later)
-            console.log("Index input:", index);
+          // Read sprite sheet
+          const spriteReader = new FileReader();
+          spriteReader.onload = async function (event) {
+            const img = new Image();
+            img.onload = async function () {
+              // Validate sprite sheet dimensions
+              if (img.width % 16 !== 0 || img.height % 16 !== 0) {
+                showNotification(
+                  "Sprite sheet dimensions must be multiples of 16."
+                );
+                return;
+              }
+              // Store data in IndexedDB
+              await storeData(jsonFile, spriteFile, indexValue);
+              loadedImage = img;
+              loadedJsonData = jsonData;
+              loadedIndex = indexValue;
+              // Display on canvas
+              loadElements(true);
+            };
+            // Set the sprite sheet data URL
+            img.src = event.target.result;
           };
-          reader.readAsText(jsonFile);
+          spriteReader.readAsDataURL(spriteFile); // Read sprite file as Data URL
         };
+        reader.readAsText(jsonFile); // Read JSON file as text
+      };
+      // Function to load saved files from IndexedDB
+      const loadElements = (scroll) => {
+        const output = document.getElementById("output");
+        const canvas = document.getElementById("canvas");
+        const jsonOutput = document.getElementById("jsonValues");
+        const ctx = canvas.getContext("2d");
+        const placementArray = loadedJsonData.data;
 
-        img.src = URL.createObjectURL(spriteFile);
-      }
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+
+        const resultArray = [];
+        // Iterate through rows first
+        for (
+          let rowIndex = 0;
+          rowIndex < placementArray[0].length;
+          rowIndex++
+        ) {
+          const processedRow = [];
+          // Iterate through columns for each row
+          for (let colIndex = 0; colIndex < placementArray.length; colIndex++) {
+            const col = placementArray[colIndex];
+            // Extract the value at the current rowIndex from each column
+            processedRow.push(col[rowIndex][loadedIndex]);
+          }
+          // Push the processed row into resultArray
+          resultArray.push(processedRow);
+        }
+
+        canvas.width = resultArray[0].length * 16;
+        canvas.height = resultArray.length * 16;
+        ctx.font = "bold 12px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = currentColor;
+
+        // Iterate over resultArray to map tiles on the canvas
+        function extractID(str) {
+          const invalidCharacterCount = (
+            str.match(/[^0-9_!@#$%,^&*(+)-]/g) || []
+          ).length;
+
+          if (invalidCharacterCount > 1) return null; // If there are more than one non-numeric invalid characters, return null
+
+          const match = str.match(/(?:_(\d+)_|_(\d+)|(\d+)_)/);
+          return match ? parseInt(match[1] || match[2] || match[3], 10) : null;
+        }
+
+        // Iterate over resultArray to map tiles on the canvas
+        resultArray.forEach((row, rowIndex) => {
+          row.forEach((tileString, colIndex) => {
+            // Calculate the destination position for the tile on the canvas
+            const destX = colIndex * 16;
+            const destY = rowIndex * 16;
+
+            if (tileString === "")
+              return showMarkings && ctx.fillText("X", destX + 8, destY + 8);
+
+            // Extract the numerical ID if the tileString is not empty
+            const tileIndex =
+              typeof tileString === "string"
+                ? extractID(tileString)
+                : tileString;
+            console.log(tileString, tileIndex);
+
+            // Calculate the source position for the tile in the image
+            const srcX = (tileIndex % (loadedImage.width / 16)) * 16; // column in the sprite sheet
+            const srcY = Math.floor(tileIndex / (loadedImage.width / 16)) * 16; // row in the sprite sheet
+
+            if (tileIndex === null) {
+              ctx.fillStyle = "red";
+              if (showMarkings) ctx.fillText("!", destX + 8, destY + 8);
+              ctx.fillStyle = currentColor;
+              return;
+            }
+            // Draw the 16x16 tile onto the canvas
+            ctx.drawImage(
+              loadedImage,
+              srcX,
+              srcY, // Source coordinates on the sprite sheet
+              16,
+              16, // Width and height of the tile
+              destX,
+              destY, // Destination coordinates on the canvas
+              16,
+              16 // Width and height on the canvas
+            );
+
+            // Draw the numerical ID on the canvas
+            if (showMarkings) ctx.fillText(tileIndex, destX + 8, destY + 8);
+          });
+        });
+
+        jsonOutput.textContent = JSON.stringify(resultArray).replace(
+          /\],/g,
+          "],\n"
+        );
+        document.getElementById("reload").disabled = true;
+        output.style.display = "block";
+        if (scroll) {
+          const canvasElement = document.getElementById("canvas");
+          const topPos =
+            canvasElement.getBoundingClientRect().top +
+            window.pageYOffset -
+            window.innerHeight * 0.44 +
+            canvasElement.offsetHeight / 2;
+          window.scrollTo({
+            top: topPos,
+            behavior: "smooth",
+          });
+        }
+      };
+
+      const toggleMarkings = (e) => {
+        const styles = e.style.backgroundColor === "green" ? "red" : "green";
+        e.style.backgroundColor = styles;
+        e.disabled = true;
+        showMarkings = !showMarkings;
+        loadElements(false);
+        setTimeout(() => {
+          e.disabled = false;
+        }, 500);
+      };
+
+      const changeMarkingColor = (e) => {
+        const color = e.style.backgroundColor;
+        switch (color) {
+          case "lime":
+            currentColor = "purple";
+            e.style.color = "white";
+            break;
+          case "purple":
+            currentColor = "cyan";
+            e.style.color = "black";
+
+            break;
+          case "cyan":
+            currentColor = "yellow";
+            break;
+          case "yellow":
+            currentColor = "black";
+            e.style.color = "white";
+            break;
+          case "black":
+            currentColor = "orange";
+            break;
+          default:
+            currentColor = "lime";
+            e.style.color = "black";
+            break;
+        }
+        e.style.backgroundColor = currentColor;
+        showMarkings = true;
+        loadElements(false);
+      };
+
+      const showNotification = (message) => {
+        // Check if there's already an existing notification
+        const existingNotification = document.querySelector(".notification");
+
+        // If there's an existing notification, remove it immediately
+        if (existingNotification) {
+          existingNotification.remove();
+        }
+        // Create the notification element
+        const notification = document.createElement("div");
+        notification.className = "notification";
+        notification.textContent = message;
+
+        // Append the notification to the body
+        document.body.appendChild(notification);
+
+        // Trigger the animation (fade in)
+        setTimeout(() => {
+          notification.style.opacity = "1";
+        }, 100);
+
+        // Hide the notification after 2 seconds
+        setTimeout(() => {
+          notification.style.opacity = "0";
+          // Remove the notification element from the DOM after fading out
+          setTimeout(() => {
+            notification.remove();
+          }, 500);
+        }, 2000);
+      };
     </script>
   </body>
 </html>
