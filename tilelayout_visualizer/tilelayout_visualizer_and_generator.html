@@ -47,7 +47,7 @@
         width: 100%;
         max-width: 200px;
         margin-top: 20px;
-        transition: background-color 0.5s ease, color 0.5s ease;
+        transition: background-color 0.5s ease, colour 0.5s ease;
       }
 
       #submit {
@@ -64,17 +64,49 @@
         background-color: #ff309b;
       }
 
+      #save {
+        background-color: #53cf15;
+      }
+      #save:hover {
+        background-color: #3eb503;
+      }
+      #load {
+        background-color: #3487db;
+      }
+      #load:hover {
+        background-color: #196abb;
+      }
+      #saveEdited {
+        background-color: #ffb618;
+      }
+      #saveEdited:hover {
+        background-color: #e99f00;
+      }
+      #saveNew {
+        background-color: #fc83c1;
+      }
+      #saveNew:hover {
+        background-color: #deaded;
+      }
+
       button:disabled {
         background-color: #bdc3c7 !important;
         cursor: not-allowed;
       }
 
-      #canvas {
+      canvas {
         display: block;
         margin: 20px auto;
         border: 1px solid #ccc;
         background-color: white;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        transition: transform 0.5s ease-in-out;
+        filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.2));
+      }
+
+      #canvas:hover {
+        transform: scale(2);
+        z-index: 999999;
       }
 
       textarea {
@@ -87,6 +119,22 @@
         width: 95%;
         resize: none;
         height: 400px;
+      }
+
+      input[type="text"] {
+        display: block;
+        margin: 20px auto;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 16px;
+        width: 95%;
+        resize: none;
+      }
+
+      input[type="text"]:focus {
+        outline: none !important;
+        border-color: none !important;
       }
 
       .container {
@@ -126,7 +174,7 @@
         top: 20px;
         left: 50%;
         transform: translateX(-50%);
-        background-color: #2ecc71;
+        background-color: #0882e5;
         color: white;
         padding: 10px 20px;
         border-radius: 5px;
@@ -162,6 +210,16 @@
         />
       </div>
 
+      <h2>JSON index</h2>
+      <p>
+        This is the index of your spritesheet within the JSON file,
+        corresponding to the first value for your tileset in
+        <u>eventSheets\Toolbar menus\Tilesets menu.json</u>.
+      </p>
+      <div class="input-group">
+        <input type="number" id="indexInput" value="1" />
+      </div>
+
       <h2>Input your spritesheet</h2>
       <p>
         Spritesheet must be a grid of 16x16 pixels with a height and width
@@ -176,40 +234,125 @@
         />
       </div>
 
-      <h2>JSON index</h2>
-      <p>
-        This is the index of your spritesheet within the JSON file,
-        corresponding to the first value for your tileset in
-        <u>eventSheets\Toolbar menus\Tilesets menu.json</u>.
-      </p>
-      <div class="input-group">
-        <input type="number" id="indexInput" value="1" />
-      </div>
-
       <div style="display: flex; justify-content: space-between">
-        <button id="submit" onclick="visualize()">Visualize</button>
         <button id="reload" onclick="loadPrevious()">
           Load previous inputs
         </button>
+        <button style="background-color: #3498db" onclick="openDocs(this)">
+          Docs
+        </button>
+        <button id="submit" onclick="visualize()">Visualize</button>
+      </div>
+
+      <div id="docs" style="display: none">
+        <h2>Documentation</h2>
+        <h3>Formats</h3>
+        Objects/single-tiles in the layouts file have several values separated
+        by underscores. They are as follows for objects:<br />
+        <span style="background-color: rgb(132, 255, 0)"
+          >objects:
+          o(obj)_objID_frame_extraValues_offsetX_offsetY_mirrorMode_angle_containedObjID</span
+        ><br />
+        And for tiles:<br />
+        <span style="background-color: rgb(132, 255, 0)"
+          >t(tile)_tilemap_tileID_offsetX_offsetY_tileStateID</span
+        ><br />
+        And tile structures:<br />
+        <span style="background-color: rgb(132, 255, 0)"
+          >s(structure)_tilemapName_rowLength_tileData_structureOffsetX_structureOffsetY_gridOffsetX_gridOffsetY</span
+        >
+        <br />
+        For values O, S & T you might have to swap to a different tilemap. Check
+        the resulting array in the output below the canvas for the name of this
+        tilemap. It will most likely be named tilemap_1_[name] or
+        tilemap_2_[name].
+        <br />
+        <h3>Canvas values</h3>
+        X - Empty space (no tile)<br />
+        # - Empty space (scrollbar is located here)<br />
+        numbers - ID of the tile<br />
+        o/s/t - Indicates an object, structure or tile belonging in this
+        position<br />
+        o/s/t + number - ID of the title part of an object/structure<br />
+        <h3>Special characters</h3>
+        * = shorthand for currently used tilemap. (Will be used if supplementary
+        tilemap is disabled)<br />
+        # = same as the star (*), but for just the base tilemap (tilemap without
+        palette ID)<br />
+        $ = get current palette ID (empty if default palette)
+        <h3>Multi tile structures</h3>
+        Multi tile structures start with an "s" as described under the formats
+        header, they contain multiple tile ID's per entry. When editing one,
+        make sure to use a reference to a different tilemap. The most important
+        values are the tiledata and rowlength since those decide the size and
+        components of the structure. The offset is mainly used in the editor to
+        make the structure display properly, preferably reuse values for the
+        same structure types.<br />
+        <h3>Creating a new entry</h3>
+        When creating a new entry, make sure to first load a different tilemap
+        and its JSON id as a reference. After that you can change the values in
+        the output array to your liking and revisualize to preview with the new
+        tilemap. Once you're happy with the result, you can generate a new JSON
+        file to replace the one in the game files. You won't have to replace any
+        images since SMC automatically assigns the correct images to the tile
+        ID's.
+        <h3>Exporting</h3>
+        You can export either by editing the entry you inputed (the JSON index)
+        or by adding a new entry. If you are adding a new entry, use the pink
+        button on the bottom of the page after loading the canvas. Either option
+        will give you a new JSON to replace the old one with.
       </div>
 
       <div id="output" style="display: none">
+        <canvas id="reference"></canvas>
         <canvas id="canvas"></canvas>
-        <div style="display: flex; justify-content: center; gap: 10px">
+        <div style="display: flex; justify-content: center; gap: 8px">
+          <button
+            style="background-color: red"
+            onclick="toggleSupplementaryTilemap(this)"
+            title="Use this if the tilemap currently loaded is one of the values listed in the text input bar below. "
+          >
+            Supplementary tilemap
+          </button>
           <button
             style="background-color: green"
             onclick="toggleMarkings(this)"
+            title="Toggles symbols on the canvas"
           >
             Toggle markings
           </button>
           <button
-            onclick="changeMarkingColor(this)"
+            onclick="changeMarkingColour(this)"
+            title="Cycle between marking colours"
             style="background-color: lime; color: black"
           >
-            Change marking color
+            Change marking colour
+          </button>
+          <button
+            style="background-color: red"
+            onclick="toggleAutoUpdate(this)"
+          >
+            Auto update
           </button>
         </div>
         <textarea id="jsonValues"></textarea>
+        <input
+          id="uniqueWords"
+          type="text"
+          placeholder="This tilemap has no tiles from other tilemaps."
+          readonly
+          title="These are the supplementary tilemaps belonging to the JSON index (editor page), outside of the main one."
+        />
+        <div style="display: flex; justify-content: center; gap: 8px">
+          <button id="save" onclick="saveTextarea(this)">Save textarea</button
+          ><button id="load" onclick="loadTextarea(this)">Load textarea</button>
+          <button id="saveEdited" onclick="exportJson(false)">
+            Export JSON file with edited page entry
+          </button>
+          <button id="saveNew" onclick="exportJson(true)">
+            Export JSON file with new page entry
+          </button>
+        </div>
       </div>
     </div>
 
@@ -218,7 +361,26 @@
       let loadedImage = null;
       let loadedJsonData = null;
       let loadedIndex = null;
-      let currentColor = "lime";
+      let currentColour = "lime";
+      let specialColour = "blue";
+      let tilemapName = "";
+      let supplementaryTilemap = false;
+      let referenceArray = null;
+      let autoUpdate = false;
+      let jsonFilename = "";
+
+      // open/close docs
+      const openDocs = (e) => {
+        const docs = document.getElementById("docs");
+        const isOpen = docs.style.display === "block";
+        docs.style.display = isOpen ? "none" : "block";
+        e.style.backgroundColor = isOpen ? "#3498db" : "#8845db";
+        if (!isOpen)
+          window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: "smooth",
+          });
+      };
       // Open IndexedDB
       const openDB = () => {
         return new Promise((resolve, reject) => {
@@ -395,126 +557,283 @@
               loadedJsonData = jsonData;
               loadedIndex = indexValue;
               // Display on canvas
+              generateReference();
               loadElements(true);
             };
             // Set the sprite sheet data URL
             img.src = event.target.result;
+            jsonFilename = jsonFile.name;
+            tilemapName = spriteFile.name.match(
+              /^[^_]+_[^_]+_([a-zA-Z0-9]+)/
+            )[1];
           };
           spriteReader.readAsDataURL(spriteFile); // Read sprite file as Data URL
         };
         reader.readAsText(jsonFile); // Read JSON file as text
       };
-      // Function to load saved files from IndexedDB
-      const loadElements = (scroll) => {
-        const output = document.getElementById("output");
-        const canvas = document.getElementById("canvas");
-        const jsonOutput = document.getElementById("jsonValues");
-        const ctx = canvas.getContext("2d");
-        const placementArray = loadedJsonData.data;
 
-        ctx.imageSmoothingEnabled = false;
-        ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+      function extractUniqueWords(nestedArray) {
+        const uniqueWords = new Set();
 
-        const resultArray = [];
-        // Iterate through rows first
-        for (
-          let rowIndex = 0;
-          rowIndex < placementArray[0].length;
-          rowIndex++
-        ) {
-          const processedRow = [];
-          // Iterate through columns for each row
-          for (let colIndex = 0; colIndex < placementArray.length; colIndex++) {
-            const col = placementArray[colIndex];
-            // Extract the value at the current rowIndex from each column
-            processedRow.push(col[rowIndex][loadedIndex]);
-          }
-          // Push the processed row into resultArray
-          resultArray.push(processedRow);
-        }
-
-        canvas.width = resultArray[0].length * 16;
-        canvas.height = resultArray.length * 16;
-        ctx.font = "bold 12px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = currentColor;
-
-        // Iterate over resultArray to map tiles on the canvas
-        function extractID(str) {
-          const invalidCharacterCount = (
-            str.match(/[^0-9_!@#$%,^&*(+)-]/g) || []
-          ).length;
-
-          if (invalidCharacterCount > 1) return null; // If there are more than one non-numeric invalid characters, return null
-
-          const match = str.match(/(?:_(\d+)_|_(\d+)|(\d+)_)/);
-          return match ? parseInt(match[1] || match[2] || match[3], 10) : null;
-        }
-
-        // Iterate over resultArray to map tiles on the canvas
-        resultArray.forEach((row, rowIndex) => {
-          row.forEach((tileString, colIndex) => {
-            // Calculate the destination position for the tile on the canvas
-            const destX = colIndex * 16;
-            const destY = rowIndex * 16;
-
-            if (tileString === "")
-              return showMarkings && ctx.fillText("X", destX + 8, destY + 8);
-
-            // Extract the numerical ID if the tileString is not empty
-            const tileIndex =
-              typeof tileString === "string"
-                ? extractID(tileString)
-                : tileString;
-            console.log(tileString, tileIndex);
-
-            // Calculate the source position for the tile in the image
-            const srcX = (tileIndex % (loadedImage.width / 16)) * 16; // column in the sprite sheet
-            const srcY = Math.floor(tileIndex / (loadedImage.width / 16)) * 16; // row in the sprite sheet
-
-            if (tileIndex === null) {
-              ctx.fillStyle = "red";
-              if (showMarkings) ctx.fillText("!", destX + 8, destY + 8);
-              ctx.fillStyle = currentColor;
-              return;
+        nestedArray.flat().forEach((item) => {
+          if (typeof item === "string") {
+            // Use regex to match words between underscores
+            const matches = item.match(/(?<=_)[a-zA-Z0-9]+(?=_)/g);
+            if (matches) {
+              matches.forEach((word) => {
+                // Only add words that contain letters (to avoid adding numbers alone)
+                if (/[a-zA-Z]/.test(word)) {
+                  uniqueWords.add(word);
+                }
+              });
             }
-            // Draw the 16x16 tile onto the canvas
-            ctx.drawImage(
-              loadedImage,
-              srcX,
-              srcY, // Source coordinates on the sprite sheet
-              16,
-              16, // Width and height of the tile
-              destX,
-              destY, // Destination coordinates on the canvas
-              16,
-              16 // Width and height on the canvas
-            );
-
-            // Draw the numerical ID on the canvas
-            if (showMarkings) ctx.fillText(tileIndex, destX + 8, destY + 8);
-          });
+          }
         });
 
-        jsonOutput.textContent = JSON.stringify(resultArray).replace(
-          /\],/g,
-          "],\n"
-        );
-        document.getElementById("reload").disabled = true;
-        output.style.display = "block";
-        if (scroll) {
-          const canvasElement = document.getElementById("canvas");
-          const topPos =
-            canvasElement.getBoundingClientRect().top +
-            window.pageYOffset -
-            window.innerHeight * 0.44 +
-            canvasElement.offsetHeight / 2;
-          window.scrollTo({
-            top: topPos,
-            behavior: "smooth",
+        return Array.from(uniqueWords);
+      }
+      // Function to load saved files from IndexedDB
+      let loaded = false;
+      const loadElements = (scroll) => {
+        try {
+          const output = document.getElementById("output");
+          const reference = document.getElementById("reference");
+          const jsonOutput = document.getElementById("jsonValues");
+          const uniqueWordsOutput = document.getElementById("uniqueWords");
+          const ctx = canvas.getContext("2d");
+          const placementArray = loadedJsonData.data;
+
+          ctx.imageSmoothingEnabled = false;
+          ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+
+          const columns = loadedJsonData.size[0];
+          const rows = loadedJsonData.size[1];
+
+          // Initialize a 2D array with `false` values indicating empty cells
+          referenceArray = Array.from({ length: rows }, () =>
+            Array.from({ length: columns }, () => false)
+          );
+          const resultArray = jsonOutput.value
+            ? JSON.parse(jsonOutput.value)
+            : [];
+
+          // Iterate through rows first
+          if (resultArray.length === 0) {
+            for (
+              let rowIndex = 0;
+              rowIndex < placementArray[0].length;
+              rowIndex++
+            ) {
+              const processedRow = [];
+              // Iterate through columns for each row
+              for (
+                let colIndex = 0;
+                colIndex < placementArray.length;
+                colIndex++
+              ) {
+                const col = placementArray[colIndex];
+                // Extract the value at the current rowIndex from each column
+                processedRow.push(col[rowIndex][loadedIndex]);
+              }
+              // Push the processed row into resultArray
+              resultArray.push(processedRow);
+            }
+          }
+
+          const uniqueWords = extractUniqueWords(resultArray);
+          uniqueWordsOutput.value = uniqueWords.join(", ");
+
+          canvas.width = resultArray[0].length * 16;
+          canvas.height = resultArray.length * 16;
+          ctx.font = "10px Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = currentColour;
+
+          // Iterate over resultArray to map tiles on the canvas
+          resultArray.forEach((row, rowIndex) => {
+            row.forEach((tileString, colIndex) => {
+              // Calculate the destination position for the tile on the canvas
+              const destX = colIndex * 16;
+              const destY = rowIndex * 16;
+
+              // Extract the numerical ID if the tileString is not empty
+              let [tileIndex, draw] = extractID(tileString, colIndex);
+
+              if (draw === "X") return;
+
+              // Calculate the source position for the tile in the image
+              const srcX = (tileIndex % (loadedImage.width / 16)) * 16; // column in the sprite sheet
+              const srcY =
+                Math.floor(tileIndex / (loadedImage.width / 16)) * 16; // row in the sprite sheet
+
+              if (draw !== null && draw !== "multi" && tileIndex === null) {
+                if (referenceArray[rowIndex][colIndex]) return;
+                if (draw === "#") ctx.fillStyle = "red";
+                if (["t", "s", "o"].includes(draw))
+                  ctx.fillStyle = specialColour;
+                if (showMarkings) ctx.fillText(draw, destX + 8, destY + 8);
+                ctx.fillStyle = currentColour;
+                referenceArray[rowIndex][colIndex] = true;
+                return;
+              }
+              // multi tile structures
+              if (draw === "multi") {
+                return drawSpecialEntry(
+                  tileString,
+                  ctx,
+                  loadedImage,
+                  destX,
+                  destY
+                );
+                // for non multi tile structures/objects
+              }
+              ctx.drawImage(
+                loadedImage,
+                srcX,
+                srcY, // Source coordinates on the sprite sheet
+                16,
+                16, // Width and height of the tile
+                destX,
+                destY, // Destination coordinates on the canvas
+                16,
+                16 // Width and height on the canvas
+              );
+
+              // Draw the numerical ID on the canvas
+              if (showMarkings && !referenceArray[rowIndex][colIndex]) {
+                if (draw) ctx.fillStyle = specialColour;
+                ctx.fillText(draw ? draw : tileIndex, destX + 8, destY + 8);
+                ctx.fillStyle = currentColour;
+                referenceArray[rowIndex][colIndex] = true;
+              }
+            });
           });
+          ctx.fillStyle = "red";
+
+          referenceArray.forEach((row, rowIndex) => {
+            row.forEach((value, colIndex) => {
+              if (value === false) {
+                const destX = colIndex * 16;
+                const destY = rowIndex * 16;
+                ctx.fillText("X", destX + 8, destY + 8);
+              }
+            });
+          });
+
+          if (!jsonOutput.textContent)
+            jsonOutput.textContent = JSON.stringify(resultArray).replace(
+              /\],/g,
+              "],\n"
+            );
+          document.getElementById("reload").disabled = true;
+          output.style.display = "block";
+          if (scroll) {
+            const canvasElement = document.getElementById("canvas");
+            const topPos =
+              canvasElement.getBoundingClientRect().top +
+              window.pageYOffset -
+              window.innerHeight * 0.44 +
+              canvasElement.offsetHeight / 2;
+            window.scrollTo({
+              top: topPos,
+              behavior: "smooth",
+            });
+          }
+        } catch (error) {
+          console.error(error);
+          showNotification("Error: " + error.message);
         }
+      };
+
+      const drawSpecialEntry = (input, ctx, img, destX, destY) => {
+        // Split the string by underscores
+        const parts = input.split("_");
+        // Extract values into separate constants
+        const rowLength = parseInt(parts[2]);
+        const tileData = parts[3].split(",");
+        const structureOffsetX = parts[4];
+        const structureOffsetY = parts[5];
+
+        let curX = destX;
+        let curY = destY;
+        let curRowIndex = 1;
+        tileData.forEach((tileIndex) => {
+          if (tileIndex === null || isNaN(tileIndex)) return; // Skip invalid tile indices
+          const srcX = (tileIndex % (img.width / 16)) * 16; // column in the sprite sheet
+          const srcY = Math.floor(tileIndex / (img.width / 16)) * 16; // row in the sprite sheet
+          // Draw the tile onto the canvas
+          ctx.drawImage(img, srcX, srcY, 16, 16, curX, curY, 16, 16);
+          // Draw the numerical ID on the canvas
+          if (showMarkings && !referenceArray[curY / 16][curX / 16]) {
+            ctx.fillStyle = specialColour;
+            ctx.strokeStyle = specialColour;
+            ctx.save();
+            ctx.translate(curX + 8, curY + 8);
+            ctx.rotate(-Math.PI / 4);
+            ctx.fillText(input[0] + tileIndex, 0, 0);
+            ctx.restore();
+            ctx.strokeRect(curX, curY, 16, 16);
+            ctx.fillStyle = currentColour;
+            referenceArray[curY / 16][curX / 16] = true;
+          }
+
+          // increment
+          if (curRowIndex === rowLength) {
+            curY += 16;
+            curRowIndex = 1;
+            curX = destX;
+          } else {
+            curX += 16;
+            curRowIndex++;
+          }
+        });
+      };
+
+      // Iterate over resultArray to map tiles on the canvas
+      const extractID = (str, colIndex) => {
+        // ignore tilestrings that are empty
+        if (str === "") return [null, colIndex === 17 ? "#" : "X"];
+
+        // if its a number, return directly, unless this is a supplementary tilemap
+        if (typeof str === "number")
+          return supplementaryTilemap ? [null, str] : [str, null];
+
+        if (/^[ost]/.test(str)) {
+          // use another tilemap not belonging to the JSON index
+          if (
+            supplementaryTilemap &&
+            str.substring(2, 2 + tilemapName.length).toLowerCase() ===
+              tilemapName
+          ) {
+            const valueAfterMatch = str.substring(2 + tilemapName.length + 1);
+            const number = parseInt(valueAfterMatch);
+            return [number, str[0] + number];
+          }
+
+          // use current tilemap
+          if (/^[ost]_\*_/.test(str) && !supplementaryTilemap)
+            return [null, "multi"];
+
+          // other spritesheet
+          return [null, str[0]];
+        }
+        return [null, "X"];
+      };
+
+      const toggleSupplementaryTilemap = (e) => {
+        const styles = e.style.backgroundColor === "green" ? "red" : "green";
+        e.style.backgroundColor = styles;
+        e.disabled = true;
+        supplementaryTilemap = !supplementaryTilemap;
+        loadElements(false);
+        setTimeout(() => {
+          e.disabled = false;
+        }, 500);
+        const resultingText = supplementaryTilemap
+          ? "Now using the currently loaded tilemap as supplementary."
+          : "Tilemap is now expected to be the main tilemap belonging to this tileset.";
+        showNotification(resultingText);
       };
 
       const toggleMarkings = (e) => {
@@ -528,36 +847,94 @@
         }, 500);
       };
 
-      const changeMarkingColor = (e) => {
-        const color = e.style.backgroundColor;
-        switch (color) {
+      const changeMarkingColour = (e) => {
+        const colour = e.style.backgroundColor;
+        switch (colour) {
           case "lime":
-            currentColor = "purple";
+            currentColour = "purple";
+            specialColour = "chartreuse";
             e.style.color = "white";
             break;
           case "purple":
-            currentColor = "cyan";
+            currentColour = "cyan";
             e.style.color = "black";
-
+            specialColour = "black";
             break;
           case "cyan":
-            currentColor = "yellow";
+            currentColour = "yellow";
+            specialColour = "pink";
             break;
           case "yellow":
-            currentColor = "black";
+            currentColour = "black";
             e.style.color = "white";
+            specialColour = "darkgreen";
             break;
           case "black":
-            currentColor = "orange";
+            currentColour = "orange";
+            specialColour = "brown";
             break;
           default:
-            currentColor = "lime";
+            currentColour = "lime";
             e.style.color = "black";
+            specialColour = "blue";
             break;
         }
-        e.style.backgroundColor = currentColor;
+        e.style.backgroundColor = currentColour;
         showMarkings = true;
         loadElements(false);
+      };
+
+      const generateReference = () => {
+        const reference = document.getElementById("reference");
+        const ctx = reference.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, reference.width, reference.height); // Clear canvas
+        reference.width = loadedImage.width * 2;
+        reference.height = loadedImage.height * 2;
+        ctx.font = "16px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = currentColour;
+        ctx.strokeStyle = currentColour;
+        const val = 32;
+        const halfVal = val / 2;
+
+        // draw the reference
+        ctx.drawImage(loadedImage, 0, 0, reference.width, reference.height);
+
+        // place incrementing numbers
+        let number = 1;
+        for (let y = 0; y < reference.height; y += val) {
+          for (let x = 0; x < reference.width; x += val) {
+            ctx.strokeRect(x, y, val, val);
+            ctx.fillText(number, x + halfVal, y + halfVal);
+            number++;
+          }
+        }
+      };
+
+      const toggleAutoUpdate = (e) => {
+        const inputHandler = () => loadElements(false);
+        e.style.backgroundColor =
+          e.style.backgroundColor === "red" ? "green" : "red";
+        e.disabled = true;
+        loadElements(true);
+        autoUpdate = !autoUpdate;
+        setTimeout(() => {
+          e.disabled = false;
+        }, 500);
+        if (autoUpdate) {
+          showNotification(
+            "Editing the array in the text area will now auto update the canvas."
+          );
+          return document
+            .getElementById("jsonValues")
+            .addEventListener("input", inputHandler);
+        }
+        showNotification("Disabled auto updating for all elements.");
+        return document
+          .getElementById("jsonValues")
+          .removeEventListener("input", inputHandler);
       };
 
       const showNotification = (message) => {
@@ -588,7 +965,60 @@
           setTimeout(() => {
             notification.remove();
           }, 500);
-        }, 2000);
+        }, 3000);
+      };
+
+      const saveTextarea = (e) => {
+        const textarea = document.getElementById("jsonValues");
+        const content = textarea.value;
+        localStorage.setItem("jsonValues", content);
+        showNotification("Saved tileset page array to local storage!");
+      };
+
+      const loadTextarea = (e) => {
+        const textarea = document.getElementById("jsonValues");
+        const content = localStorage.getItem("jsonValues");
+        if (!content)
+          return showNotification(
+            "You haven't saved anything in your local storage!"
+          );
+        textarea.value = content;
+        loadElements(false);
+        showNotification("Loaded tileset page array from local storage!");
+      };
+
+      const exportJson = (newEntry) => {
+        const array = JSON.parse(document.getElementById("jsonValues").value);
+        let jsonArray = JSON.parse(JSON.stringify(loadedJsonData.data));
+        const cols = loadedJsonData.size[0];
+        const rows = loadedJsonData.size[1];
+
+        // Iterate through each row of resultArray
+        for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
+          const row = array[rowIndex];
+
+          // Iterate through each column of the current row
+          for (let colIndex = 0; colIndex < cols; colIndex++) {
+            const value = row?.[colIndex];
+            // add the value to the JSON, or edit it
+            if (newEntry) jsonArray[colIndex][rowIndex].push(value);
+            else jsonArray[colIndex][rowIndex][loadedIndex] = value;
+          }
+        }
+        const jsonObject = {
+          c2array: true,
+          size: loadedJsonData.size,
+          data: jsonArray,
+        };
+        if (newEntry) jsonObject.size[2] += 1;
+        const jsonFile = JSON.stringify(jsonObject);
+        const blob = new Blob([jsonFile], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = jsonFilename;
+        a.click();
+        URL.revokeObjectURL(url);
       };
     </script>
   </body>
