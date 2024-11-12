@@ -377,7 +377,7 @@
         e.style.backgroundColor = isOpen ? "#3498db" : "#8845db";
         if (!isOpen)
           window.scrollTo({
-            top: document.body.scrollHeight,
+            top: docs.getBoundingClientRect().top + window.pageYOffset,
             behavior: "smooth",
           });
       };
@@ -711,15 +711,16 @@
           });
           ctx.fillStyle = "red";
 
-          referenceArray.forEach((row, rowIndex) => {
-            row.forEach((value, colIndex) => {
-              if (value === false) {
-                const destX = colIndex * 16;
-                const destY = rowIndex * 16;
-                ctx.fillText("X", destX + 8, destY + 8);
-              }
+          if (showMarkings)
+            referenceArray.forEach((row, rowIndex) => {
+              row.forEach((value, colIndex) => {
+                if (value === false) {
+                  const destX = colIndex * 16;
+                  const destY = rowIndex * 16;
+                  ctx.fillText("X", destX + 8, destY + 8);
+                }
+              });
             });
-          });
 
           if (!jsonOutput.textContent)
             jsonOutput.textContent = JSON.stringify(resultArray).replace(
@@ -806,8 +807,9 @@
             str.substring(2, 2 + tilemapName.length).toLowerCase() ===
               tilemapName
           ) {
-            const valueAfterMatch = str.substring(2 + tilemapName.length + 1);
-            const number = parseInt(valueAfterMatch);
+            const split = str.split("_");
+            if (split.length > 3) return [null, "multi"];
+            const number = parseInt(split[2], 10);
             return [number, str[0] + number];
           }
 
