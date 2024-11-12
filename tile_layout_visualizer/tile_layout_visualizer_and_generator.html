@@ -142,6 +142,7 @@
         margin: 0 auto;
         background-color: #ffffff;
         padding: 20px;
+        margin-bottom: 50px;
         border-radius: 8px;
         box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
       }
@@ -184,9 +185,49 @@
         transition: opacity 0.35s ease-in-out;
         z-index: 9999;
       }
+
+      .scroll {
+        position: fixed;
+        bottom: 20px;
+        background-color: #0882e5;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-size: 16px;
+        z-index: 9999;
+      }
+
+      .scroll:hover {
+        cursor: pointer;
+      }
     </style>
   </head>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // Check if the user is on a mobile device
+      if (/Android|iPhone/i.test(navigator.userAgent)) {
+        // Replace the content of the body with a custom message
+        document.body.innerHTML =
+          "<h1>This tool is designed to only work on desktop devices.</h1>";
+      }
+    });
+  </script>
   <body>
+    <div
+      class="scroll"
+      style="right: 20px"
+      onclick="window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });"
+    >
+      To bottom
+    </div>
+    <div
+      class="scroll"
+      style="left: 20px"
+      onclick="window.scrollTo({ top: 0, behavior: 'smooth' });"
+    >
+      To top
+    </div>
+
     <h1>Tile Layout Visualizer</h1>
     <div class="container">
       <p>
@@ -304,8 +345,9 @@
       </div>
 
       <div id="output" style="display: none">
-        <canvas id="reference"></canvas>
-        <canvas id="canvas"></canvas>
+        <h2 style="text-align: center">Reference (click to mark tiles)</h2>
+        <canvas id="reference"></canvas><br />
+        <h2 style="text-align: center">Tileset page preview</h2>
         <div style="display: flex; justify-content: center; gap: 8px">
           <button
             style="background-color: red"
@@ -335,6 +377,8 @@
             Auto update
           </button>
         </div>
+        <canvas id="canvas"></canvas>
+
         <textarea id="jsonValues"></textarea>
         <input
           id="uniqueWords"
@@ -344,8 +388,11 @@
           title="These are the supplementary tilemaps belonging to the JSON index (editor page), outside of the main one."
         />
         <div style="display: flex; justify-content: center; gap: 8px">
-          <button id="save" onclick="saveTextarea(this)">Save textarea</button
-          ><button id="load" onclick="loadTextarea(this)">Load textarea</button>
+          <button id="save" onclick="saveTextarea(this)">
+            Save textarea & reference</button
+          ><button id="load" onclick="loadTextarea(this)">
+            Load textarea & reference
+          </button>
           <button id="saveEdited" onclick="exportJson(false)">
             Export JSON file with edited page entry
           </button>
@@ -368,6 +415,7 @@
       let referenceArray = null;
       let autoUpdate = false;
       let jsonFilename = "";
+      let referenceCanvasArray = null;
 
       // open/close docs
       const openDocs = (e) => {
@@ -572,7 +620,7 @@
         reader.readAsText(jsonFile); // Read JSON file as text
       };
 
-      function extractUniqueWords(nestedArray) {
+      const extractUniqueWords = (nestedArray) => {
         const uniqueWords = new Set();
 
         nestedArray.flat().forEach((item) => {
@@ -591,7 +639,7 @@
         });
 
         return Array.from(uniqueWords);
-      }
+      };
       // Function to load saved files from IndexedDB
       let loaded = false;
       const loadElements = (scroll) => {
@@ -643,19 +691,21 @@
           const uniqueWords = extractUniqueWords(resultArray);
           uniqueWordsOutput.value = uniqueWords.join(", ");
 
-          canvas.width = resultArray[0].length * 16;
-          canvas.height = resultArray.length * 16;
-          ctx.font = "10px Arial";
+          canvas.width = resultArray[0].length * 18;
+          canvas.height = resultArray.length * 18;
+          ctx.font = "12px Arial";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillStyle = currentColour;
+          const offsetX = 9;
+          const offsetY = 10;
 
           // Iterate over resultArray to map tiles on the canvas
           resultArray.forEach((row, rowIndex) => {
             row.forEach((tileString, colIndex) => {
               // Calculate the destination position for the tile on the canvas
-              const destX = colIndex * 16;
-              const destY = rowIndex * 16;
+              const destX = colIndex * 18;
+              const destY = rowIndex * 18;
 
               // Extract the numerical ID if the tileString is not empty
               let [tileIndex, draw] = extractID(tileString, colIndex);
@@ -672,7 +722,8 @@
                 if (draw === "#") ctx.fillStyle = "red";
                 if (["t", "s", "o"].includes(draw))
                   ctx.fillStyle = specialColour;
-                if (showMarkings) ctx.fillText(draw, destX + 8, destY + 8);
+                if (showMarkings)
+                  ctx.fillText(draw, destX + offsetX, destY + offsetY);
                 ctx.fillStyle = currentColour;
                 referenceArray[rowIndex][colIndex] = true;
                 return;
@@ -694,8 +745,8 @@
                 srcY, // Source coordinates on the sprite sheet
                 16,
                 16, // Width and height of the tile
-                destX,
-                destY, // Destination coordinates on the canvas
+                destX + 1,
+                destY + 1, // Destination coordinates on the canvas
                 16,
                 16 // Width and height on the canvas
               );
@@ -703,7 +754,11 @@
               // Draw the numerical ID on the canvas
               if (showMarkings && !referenceArray[rowIndex][colIndex]) {
                 if (draw) ctx.fillStyle = specialColour;
-                ctx.fillText(draw ? draw : tileIndex, destX + 8, destY + 8);
+                ctx.fillText(
+                  draw ? draw : tileIndex,
+                  destX + offsetX,
+                  destY + offsetY
+                );
                 ctx.fillStyle = currentColour;
                 referenceArray[rowIndex][colIndex] = true;
               }
@@ -715,9 +770,9 @@
             referenceArray.forEach((row, rowIndex) => {
               row.forEach((value, colIndex) => {
                 if (value === false) {
-                  const destX = colIndex * 16;
-                  const destY = rowIndex * 16;
-                  ctx.fillText("X", destX + 8, destY + 8);
+                  const destX = colIndex * 18;
+                  const destY = rowIndex * 18;
+                  ctx.fillText("X", destX + offsetX, destY + offsetY);
                 }
               });
             });
@@ -753,42 +808,77 @@
         // Extract values into separate constants
         const rowLength = parseInt(parts[2]);
         const tileData = parts[3].split(",");
-        const structureOffsetX = parts[4];
-        const structureOffsetY = parts[5];
+        const structureOffsetX = 1 + parseInt(parts[4] || 0);
+        const structureOffsetY = 1 + parseInt(parts[5] || 0);
 
         let curX = destX;
         let curY = destY;
+        let entryX = curX / 18;
+        let entryY = curY / 18;
         let curRowIndex = 1;
+
+        const nextEntry = (val) => {
+          if (curRowIndex === rowLength) {
+            curY += val;
+            entryY += 1;
+            curRowIndex = 1;
+            curX = destX;
+            entryX = curX / 18;
+          } else {
+            curX += val;
+            entryX += 1;
+            curRowIndex++;
+          }
+        };
+
         tileData.forEach((tileIndex) => {
           if (tileIndex === null || isNaN(tileIndex)) return; // Skip invalid tile indices
           const srcX = (tileIndex % (img.width / 16)) * 16; // column in the sprite sheet
           const srcY = Math.floor(tileIndex / (img.width / 16)) * 16; // row in the sprite sheet
           // Draw the tile onto the canvas
-          ctx.drawImage(img, srcX, srcY, 16, 16, curX, curY, 16, 16);
-          // Draw the numerical ID on the canvas
-          if (showMarkings && !referenceArray[curY / 16][curX / 16]) {
-            ctx.fillStyle = specialColour;
-            ctx.strokeStyle = specialColour;
-            ctx.save();
-            ctx.translate(curX + 8, curY + 8);
-            ctx.rotate(-Math.PI / 4);
-            ctx.fillText(input[0] + tileIndex, 0, 0);
-            ctx.restore();
-            ctx.strokeRect(curX, curY, 16, 16);
-            ctx.fillStyle = currentColour;
-            referenceArray[curY / 16][curX / 16] = true;
-          }
-
+          ctx.drawImage(
+            img,
+            srcX,
+            srcY,
+            16,
+            16,
+            curX + structureOffsetX,
+            curY + structureOffsetY,
+            16,
+            16
+          );
           // increment
-          if (curRowIndex === rowLength) {
-            curY += 16;
-            curRowIndex = 1;
-            curX = destX;
-          } else {
-            curX += 16;
-            curRowIndex++;
-          }
+          nextEntry(16);
         });
+
+        curX = destX;
+        curY = destY;
+        entryX = curX / 18;
+        entryY = curY / 18;
+
+        if (showMarkings) {
+          tileData.forEach((tileIndex) => {
+            // Draw the numerical ID on the canvas
+            if (!referenceArray[entryY][entryX]) {
+              ctx.fillStyle = specialColour;
+              ctx.strokeStyle = specialColour;
+              ctx.save();
+              ctx.translate(curX + 9, curY + 10);
+              ctx.rotate(-Math.PI / 4);
+              ctx.fillText(input[0] + tileIndex, 0, 0);
+              ctx.restore();
+              ctx.fillStyle = currentColour;
+              referenceArray[entryY][entryX] = true;
+            }
+            nextEntry(18);
+          });
+          ctx.strokeRect(
+            destX,
+            destY,
+            18 * rowLength,
+            18 * (tileData.length / rowLength)
+          );
+        }
       };
 
       // Iterate over resultArray to map tiles on the canvas
@@ -883,10 +973,11 @@
         }
         e.style.backgroundColor = currentColour;
         showMarkings = true;
+        generateReference();
         loadElements(false);
       };
 
-      const generateReference = () => {
+      const generateReference = (e) => {
         const reference = document.getElementById("reference");
         const ctx = reference.getContext("2d");
         ctx.imageSmoothingEnabled = false;
@@ -901,18 +992,42 @@
         const val = 32;
         const halfVal = val / 2;
 
+        if (!e && referenceCanvasArray === null)
+          referenceCanvasArray = Array.from(
+            { length: reference.height / val },
+            () => Array.from({ length: reference.width / val }, () => false)
+          );
+
+        if (e && e.type === "click") {
+          const cursorX = e.offsetX;
+          const cursorY = e.offsetY;
+          const x = Math.floor(cursorX / val);
+          const y = Math.floor(cursorY / val);
+          referenceCanvasArray[y][x] = !referenceCanvasArray[y][x];
+        }
         // draw the reference
         ctx.drawImage(loadedImage, 0, 0, reference.width, reference.height);
-
+        console.log("!");
         // place incrementing numbers
         let number = 1;
         for (let y = 0; y < reference.height; y += val) {
           for (let x = 0; x < reference.width; x += val) {
-            ctx.strokeRect(x, y, val, val);
+            if (referenceCanvasArray[y / val][x / val]) {
+              ctx.fillStyle = "rgba(255,0,0,0.67)";
+              ctx.fillRect(x, y, val, val);
+              ctx.fillStyle = "black";
+            } else {
+              ctx.strokeRect(x, y, val, val);
+            }
             ctx.fillText(number, x + halfVal, y + halfVal);
             number++;
+            ctx.fillStyle = currentColour;
           }
         }
+        // add an event listener
+        if (reference.eventListenerCount)
+          reference.removeEventListener("click", generateReference);
+        reference.addEventListener("click", generateReference);
       };
 
       const toggleAutoUpdate = (e) => {
@@ -974,17 +1089,25 @@
         const textarea = document.getElementById("jsonValues");
         const content = textarea.value;
         localStorage.setItem("jsonValues", content);
+        localStorage.setItem(
+          "referenceCanvasArray",
+          JSON.stringify(referenceCanvasArray)
+        );
         showNotification("Saved tileset page array to local storage!");
       };
 
       const loadTextarea = (e) => {
         const textarea = document.getElementById("jsonValues");
         const content = localStorage.getItem("jsonValues");
+        referenceCanvasArray = JSON.parse(
+          localStorage.getItem("referenceCanvasArray")
+        );
         if (!content)
           return showNotification(
             "You haven't saved anything in your local storage!"
           );
         textarea.value = content;
+        generateReference();
         loadElements(false);
         showNotification("Loaded tileset page array from local storage!");
       };
