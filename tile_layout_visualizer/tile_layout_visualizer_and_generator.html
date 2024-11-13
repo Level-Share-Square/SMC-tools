@@ -711,7 +711,9 @@
                 return;
               }
               loadedSupplementaryImages.push(supImg);
-              tilemapNames.push(image.name.split("_")[2].split(".")[0]);
+              tilemapNames.push(
+                image.name.split("_")[2].split(".")[0].toLowerCase()
+              );
               resolve();
             };
             supImg.src = event.target.result;
