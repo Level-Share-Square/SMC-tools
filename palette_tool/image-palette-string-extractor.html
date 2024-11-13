@@ -266,110 +266,111 @@
         selectedFiles = Array.from(event.target.files);
       });
 
-      runButton.addEventListener("click", () => {
+      runButton.addEventListener("click", async () => {
         if (selectedFiles.length === 0) {
           alert("Please select files first.");
           return;
         }
-        handleFiles(selectedFiles);
+        await handleFiles(selectedFiles);
+        outputField.value = mapUploadButton.disabled
+          ? `"${outputString.slice(0, -4)}"`
+          : outputString.slice(0, -3) + "--"; // Remove trailing symbols
+        output.style.display = "block";
+        window.scrollTo({
+          top: document.body.scrollHeight,
+          behavior: "smooth",
+        });
       });
 
-      function handleFiles(files) {
-        const disableCoordReference = document.getElementById(
-          "disableCoordReference"
-        ).checked;
-        const outputField = document.getElementById("outputField");
-        let outputString = "";
-        let referenceCoordinates = [];
+      let outputString = "";
 
-        files.forEach((file, fileIndex) => {
-          const reader = new FileReader();
-          reader.onload = function (e) {
-            const img = new Image();
-            img.src = e.target.result;
+      const handleFiles = (files) => {
+        return new Promise((resolve, reject) => {
+          outputString = "";
+          const disableCoordReference = document.getElementById(
+            "disableCoordReference"
+          ).checked;
+          const outputField = document.getElementById("outputField");
+          let referenceCoordinates = [];
 
-            img.onload = function () {
-              const canvas = document.createElement("canvas");
-              const ctx = canvas.getContext("2d");
-              canvas.width = img.width;
-              canvas.height = img.height;
-              ctx.drawImage(img, 0, 0);
+          files.forEach((file, fileIndex) => {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+              const img = new Image();
+              img.src = e.target.result;
 
-              const imageData = ctx.getImageData(
-                0,
-                0,
-                canvas.width,
-                canvas.height
-              );
-              const { data, width, height } = imageData;
-              const colorMap = new Map();
+              img.onload = function () {
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
 
-              if (
-                referenceCoordinates.length > 0 &&
-                !disableCoordReference &&
-                fileIndex > 0
-              ) {
-                referenceCoordinates.forEach(({ x, y }) => {
-                  const index = (y * width + x) * 4;
-                  const r = data[index],
-                    g = data[index + 1],
-                    b = data[index + 2],
-                    a = data[index + 3];
+                const imageData = ctx.getImageData(
+                  0,
+                  0,
+                  canvas.width,
+                  canvas.height
+                );
+                const { data, width, height } = imageData;
+                const colorMap = new Map();
 
-                  if (a === 0) return; // Skip transparent pixels
+                if (
+                  referenceCoordinates.length > 0 &&
+                  !disableCoordReference &&
+                  fileIndex > 0
+                ) {
+                  referenceCoordinates.forEach(({ x, y }, i) => {
+                    const index = (y * width + x) * 4;
+                    const r = data[index],
+                      g = data[index + 1],
+                      b = data[index + 2],
+                      a = data[index + 3];
 
-                  const rgbString = `${r},${g},${b}`;
-                  outputString += `${rgbString} | `;
-                });
-                outputField.value = `"${outputString.slice(0, -3)}"`;
-                output.style.display = "block";
-                window.scrollTo({
-                  top: document.body.scrollHeight,
-                  behavior: "smooth",
-                });
-                return;
-              }
+                    if (a === 0) return; // Skip transparent pixels
 
-              for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                  const index = (y * width + x) * 4;
-                  const r = data[index],
-                    g = data[index + 1],
-                    b = data[index + 2],
-                    a = data[index + 3];
+                    const rgbString = `${r},${g},${b}`;
+                    const endSymbol =
+                      referenceCoordinates.length - 1 !== i ? " | " : " -- ";
+                    outputString += `${rgbString}${endSymbol}`;
+                  });
+                  // go to next entry in loop
+                  if (fileIndex === files.length - 1) resolve();
+                  return;
+                }
+                for (let y = 0; y < height; y++) {
+                  for (let x = 0; x < width; x++) {
+                    const index = (y * width + x) * 4;
+                    const r = data[index],
+                      g = data[index + 1],
+                      b = data[index + 2],
+                      a = data[index + 3];
+                    if (a === 0) continue; // Skip transparent pixels
 
-                  if (a === 0) continue; // Skip transparent pixels
-
-                  const rgbString = `${r},${g},${b}`;
-                  if (!colorMap.has(rgbString)) {
-                    colorMap.set(rgbString, { r, g, b });
-                    referenceCoordinates.push({ x, y });
+                    const rgbString = `${r},${g},${b}`;
+                    if (!colorMap.has(rgbString)) {
+                      colorMap.set(rgbString, { r, g, b });
+                      referenceCoordinates.push({ x, y });
+                    }
                   }
                 }
-              }
 
-              let key = 1;
-              const mapSize = colorMap.size;
-              colorMap.forEach((rgb) => {
-                const endSymbol = mapSize !== key ? " | " : " -- ";
-                outputString += `${rgb.r},${rgb.g},${rgb.b}${endSymbol}`;
-                key++;
-              });
-
-              if (fileIndex === files.length - 1) {
-                outputField.value = outputString.slice(0, -4) + " -- "; // Remove trailing symbols
-                output.style.display = "block";
-                window.scrollTo({
-                  top: document.body.scrollHeight,
-                  behavior: "smooth",
+                let key = 0;
+                const mapSize = colorMap.size;
+                colorMap.forEach((rgb) => {
+                  key++;
+                  const endSymbol = mapSize !== key ? " | " : " -- ";
+                  outputString += `${rgb.r},${rgb.g},${rgb.b}${endSymbol}`;
                 });
-              }
-            };
-          };
 
-          reader.readAsDataURL(file);
+                if (fileIndex === files.length - 1) resolve();
+              };
+            };
+
+            reader.readAsDataURL(file);
+          });
         });
-      }
+      };
     </script>
   </body>
 </html>
