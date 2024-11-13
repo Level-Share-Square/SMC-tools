@@ -229,6 +229,9 @@
     </div>
 
     <h1>Tile Layout Visualizer</h1>
+    <i style="color: #838383; text-align: center; width: 100%; display: block"
+      >By MrGerund (The Flying Dutchman)</i
+    ><br />
     <div class="container">
       <p>
         This tool is used to visualize the position of tileset components in the
@@ -261,16 +264,37 @@
         <input type="number" id="indexInput" value="1" />
       </div>
 
-      <h2>Input your spritesheet</h2>
+      <h2>Input your primary tilemap</h2>
       <p>
         Spritesheet must be a grid of 16x16 pixels with a height and width
-        consisting of multiples of 16. (example: 160 width by 256 height)
+        consisting of multiples of 16. (example: 160 width by 256 height) You
+        can find these in the /images/ folder inside of SMC-game. The name can
+        be for example tilemap_1_sewer.png for the SMAS sewer tileset.
       </p>
       <div class="input-group">
         <input
           type="file"
           id="spriteInput"
           accept=".png"
+          onchange="document.getElementById(`reload`).disabled = false"
+        />
+      </div>
+
+      <h2>Supplementary tilemaps (optional)</h2>
+      <p>
+        Tileset pages often contain more than 1 tilemap, you can provide these
+        here (multiple files supported). If you're not certain what the
+        supplementary tilemaps are, then leave this blank and load your main
+        tilemap. The names of the supplementary tilemaps will appear in the
+        input field at the bottom of this page, which you can use to look them
+        up. Format: /images/tilemap_[GAMESTYLE]_[NAME].png
+      </p>
+      <div class="input-group">
+        <input
+          type="file"
+          id="supplementaryInput"
+          accept=".png"
+          multiple
           onchange="document.getElementById(`reload`).disabled = false"
         />
       </div>
@@ -345,17 +369,21 @@
       </div>
 
       <div id="output" style="display: none">
-        <h2 style="text-align: center">Reference (click to mark tiles)</h2>
-        <canvas id="reference"></canvas><br />
+        <h2 style="text-align: center" id="refHdr">
+          Reference (click to mark tiles)
+        </h2>
+        <div
+          style="
+            display: flex;
+            justify-content: center;
+            flex-direction: row;
+            flex-wrap: wrap;
+          "
+          id="canvas-container"
+        ></div>
+        <br />
         <h2 style="text-align: center">Tileset page preview</h2>
         <div style="display: flex; justify-content: center; gap: 8px">
-          <button
-            style="background-color: red"
-            onclick="toggleSupplementaryTilemap(this)"
-            title="Use this if the tilemap currently loaded is one of the values listed in the text input bar below. "
-          >
-            Supplementary tilemap
-          </button>
           <button
             style="background-color: green"
             onclick="toggleMarkings(this)"
@@ -406,16 +434,16 @@
     <script>
       let showMarkings = true;
       let loadedImage = null;
+      let loadedSupplementaryImages = [];
       let loadedJsonData = null;
       let loadedIndex = null;
       let currentColour = "lime";
       let specialColour = "blue";
-      let tilemapName = "";
-      let supplementaryTilemap = false;
+      let tilemapNames = [];
       let referenceArray = null;
       let autoUpdate = false;
       let jsonFilename = "";
-      let referenceCanvasArray = null;
+      let referenceCanvasArrays = [];
 
       // open/close docs
       const openDocs = (e) => {
@@ -451,7 +479,12 @@
       };
 
       // Store data in IndexedDB
-      const storeData = (jsonFile, spriteFile, indexValue) => {
+      const storeData = (
+        jsonFile,
+        spriteFile,
+        indexValue,
+        supplementaryImages
+      ) => {
         return new Promise((resolve, reject) => {
           const request = indexedDB.open("TileLayoutDB", 1);
 
@@ -477,6 +510,7 @@
             const record = {
               json: jsonFile,
               sprite: spriteFile,
+              extraTilemaps: supplementaryImages,
               customKey: `index_1`,
               index: indexValue,
             };
@@ -520,7 +554,8 @@
               const spriteFile = new File([record.sprite], record.sprite.name, {
                 type: "image/png",
               });
-
+              const supplementaryImages =
+                Array.from(record.extraTilemaps) || [];
               // Set the file inputs to the saved data
               document.getElementById("jsonInput").files = new FileListItem([
                 jsonFile,
@@ -528,6 +563,12 @@
               document.getElementById("spriteInput").files = new FileListItem([
                 spriteFile,
               ]);
+              const supplementaryFileList = new DataTransfer();
+              supplementaryImages.forEach((file) =>
+                supplementaryFileList?.items?.add(file)
+              );
+              document.getElementById("supplementaryInput").files =
+                supplementaryFileList.files;
               document.getElementById("indexInput").value = record.index;
               showNotification("Previous data loaded.");
 
@@ -561,6 +602,8 @@
           10
         );
         const spriteFile = document.getElementById("spriteInput").files[0];
+        const supplementaryImages =
+          document.getElementById("supplementaryInput").files;
 
         // Check conditions
         if (!jsonFile || !spriteFile) {
@@ -571,11 +614,8 @@
         }
 
         // Check if index is valid
-        if (indexValue < 1) {
-          showNotification("Index must be a minimum of 1.");
-          return;
-        }
-
+        if (indexValue < 1)
+          return showNotification("Index must be a minimum of 1.");
         // Read JSON
         const reader = new FileReader();
         reader.onload = async function (event) {
@@ -589,6 +629,9 @@
 
           // Read sprite sheet
           const spriteReader = new FileReader();
+          const supplementaryReader = new FileReader();
+
+          // load main tilemap
           spriteReader.onload = async function (event) {
             const img = new Image();
             img.onload = async function () {
@@ -599,25 +642,83 @@
                 );
                 return;
               }
-              // Store data in IndexedDB
-              await storeData(jsonFile, spriteFile, indexValue);
+
+              // Store main image and related data
               loadedImage = img;
               loadedJsonData = jsonData;
               loadedIndex = indexValue;
+
+              // Load supplementary images sequentially
+              for (const image of supplementaryImages) {
+                await loadSupplementaryImage(image);
+              }
+
+              await storeData(
+                jsonFile,
+                spriteFile,
+                indexValue,
+                supplementaryImages
+              );
+
+              const canvases = document.querySelectorAll("canvas");
+              if (canvases.length > 0)
+                canvases.forEach((canvas) => {
+                  if (canvas.id !== "canvas") {
+                    canvas.remove();
+                  }
+                });
               // Display on canvas
-              generateReference();
+              generateReference(null, 0);
+              for (let i = 0; i < supplementaryImages.length; i++) {
+                generateReference(null, i + 1);
+              }
+              if (supplementaryImages.length > 0)
+                document.getElementById("refHdr").textContent =
+                  "References (click to mark tiles)";
+              else
+                document.getElementById("refHdr").textContent =
+                  "Reference (click to mark tiles)";
+
               loadElements(true);
             };
+
             // Set the sprite sheet data URL
             img.src = event.target.result;
             jsonFilename = jsonFile.name;
-            tilemapName = spriteFile.name.match(
-              /^[^_]+_[^_]+_([a-zA-Z0-9]+)/
-            )[1];
           };
-          spriteReader.readAsDataURL(spriteFile); // Read sprite file as Data URL
+
+          // Start loading the main sprite map
+          loadedSupplementaryImages = [];
+          tilemapNames = [];
+          spriteReader.readAsDataURL(spriteFile);
         };
         reader.readAsText(jsonFile); // Read JSON file as text
+      };
+
+      // Function to read supplementary images as a Promise
+      const loadSupplementaryImage = (image) => {
+        return new Promise((resolve, reject) => {
+          const supplementaryReader = new FileReader();
+          supplementaryReader.onload = function (event) {
+            const supImg = new Image();
+            supImg.onload = function () {
+              // Validate sprite sheet dimensions
+              if (supImg.width % 16 !== 0 || supImg.height % 16 !== 0) {
+                showNotification(
+                  `Tilemap dimensions of ${supImg.src} aren't multiples of 16.`
+                );
+                reject(new Error("Invalid tilemap dimensions."));
+                return;
+              }
+              loadedSupplementaryImages.push(supImg);
+              tilemapNames.push(image.name.split("_")[2].split(".")[0]);
+              resolve();
+            };
+            supImg.src = event.target.result;
+          };
+          supplementaryReader.onerror = reject;
+          supplementaryReader.readAsDataURL(image);
+        });
       };
 
       const extractUniqueWords = (nestedArray) => {
@@ -641,7 +742,6 @@
         return Array.from(uniqueWords);
       };
       // Function to load saved files from IndexedDB
-      let loaded = false;
       const loadElements = (scroll) => {
         try {
           const output = document.getElementById("output");
@@ -706,11 +806,25 @@
               // Calculate the destination position for the tile on the canvas
               const destX = colIndex * 18;
               const destY = rowIndex * 18;
+              let imageToUse = loadedImage;
 
               // Extract the numerical ID if the tileString is not empty
               let [tileIndex, draw] = extractID(tileString, colIndex);
 
               if (draw === "X") return;
+              if (
+                draw &&
+                ["t", "s", "o"].includes(draw[0]) &&
+                tileIndex !== null
+              ) {
+                const split = tileString.split("_");
+                const tilemapRef = split[1].toLowerCase();
+                const imageIndex = tilemapNames.indexOf(tilemapRef);
+
+                ctx.fillStyle = specialColour;
+                if (imageIndex !== -1)
+                  imageToUse = loadedSupplementaryImages[imageIndex];
+              }
 
               // Calculate the source position for the tile in the image
               const srcX = (tileIndex % (loadedImage.width / 16)) * 16; // column in the sprite sheet
@@ -720,8 +834,7 @@
               if (draw !== null && draw !== "multi" && tileIndex === null) {
                 if (referenceArray[rowIndex][colIndex]) return;
                 if (draw === "#") ctx.fillStyle = "red";
-                if (["t", "s", "o"].includes(draw))
-                  ctx.fillStyle = specialColour;
+
                 if (showMarkings)
                   ctx.fillText(draw, destX + offsetX, destY + offsetY);
                 ctx.fillStyle = currentColour;
@@ -730,17 +843,11 @@
               }
               // multi tile structures
               if (draw === "multi") {
-                return drawSpecialEntry(
-                  tileString,
-                  ctx,
-                  loadedImage,
-                  destX,
-                  destY
-                );
+                return drawSpecialEntry(tileString, ctx, destX, destY);
                 // for non multi tile structures/objects
               }
               ctx.drawImage(
-                loadedImage,
+                imageToUse,
                 srcX,
                 srcY, // Source coordinates on the sprite sheet
                 16,
@@ -802,10 +909,12 @@
         }
       };
 
-      const drawSpecialEntry = (input, ctx, img, destX, destY) => {
+      const drawSpecialEntry = (input, ctx, destX, destY) => {
         // Split the string by underscores
         const parts = input.split("_");
         // Extract values into separate constants
+        const tilemapName = parts[1].toLowerCase();
+        const tilemapIndex = tilemapNames.indexOf(tilemapName);
         const rowLength = parseInt(parts[2]);
         const tileData = parts[3].split(",");
         const structureOffsetX = 1 + parseInt(parts[4] || 0);
@@ -816,6 +925,15 @@
         let entryX = curX / 18;
         let entryY = curY / 18;
         let curRowIndex = 1;
+
+        const img =
+          tilemapIndex !== -1
+            ? loadedSupplementaryImages[tilemapIndex]
+            : tilemapName === "*"
+            ? loadedImage
+            : null;
+
+        if (img === null) return;
 
         const nextEntry = (val) => {
           if (curRowIndex === rowLength) {
@@ -887,45 +1005,25 @@
         if (str === "") return [null, colIndex === 17 ? "#" : "X"];
 
         // if its a number, return directly, unless this is a supplementary tilemap
-        if (typeof str === "number")
-          return supplementaryTilemap ? [null, str] : [str, null];
+        if (typeof str === "number") return [str, null];
 
-        if (/^[ost]/.test(str)) {
+        if (["o", "s", "t"].includes(str[0])) {
           // use another tilemap not belonging to the JSON index
-          if (
-            supplementaryTilemap &&
-            str.substring(2, 2 + tilemapName.length).toLowerCase() ===
-              tilemapName
-          ) {
-            const split = str.split("_");
+          const split = str.split("_");
+          const tilemapRef = split[1].toLowerCase();
+          if (tilemapNames.includes(tilemapRef)) {
             if (split.length > 3) return [null, "multi"];
             const number = parseInt(split[2], 10);
             return [number, str[0] + number];
           }
 
           // use current tilemap
-          if (/^[ost]_\*_/.test(str) && !supplementaryTilemap)
-            return [null, "multi"];
+          if (/^[ost]_\*_/.test(str)) return [null, "multi"];
 
           // other spritesheet
           return [null, str[0]];
         }
         return [null, "X"];
-      };
-
-      const toggleSupplementaryTilemap = (e) => {
-        const styles = e.style.backgroundColor === "green" ? "red" : "green";
-        e.style.backgroundColor = styles;
-        e.disabled = true;
-        supplementaryTilemap = !supplementaryTilemap;
-        loadElements(false);
-        setTimeout(() => {
-          e.disabled = false;
-        }, 500);
-        const resultingText = supplementaryTilemap
-          ? "Now using the currently loaded tilemap as supplementary."
-          : "Tilemap is now expected to be the main tilemap belonging to this tileset.";
-        showNotification(resultingText);
       };
 
       const toggleMarkings = (e) => {
@@ -973,17 +1071,48 @@
         }
         e.style.backgroundColor = currentColour;
         showMarkings = true;
-        generateReference();
+        generateReference(null, 0);
+        for (let i = 0; i < loadedSupplementaryImages.length; i++) {
+          generateReference(null, i + 1);
+        }
         loadElements(false);
       };
 
-      const generateReference = (e) => {
-        const reference = document.getElementById("reference");
+      // Container element for canvases
+      const container = document.querySelector("div");
+
+      // Function to generate a new reference canvas
+      const generateReference = (e, index) => {
+        const container = document.getElementById("canvas-container");
+        const canvasId = `reference-${index}`;
+        let image;
+        let reference = e?.target
+          ? e.target
+          : document.getElementById(canvasId);
+        if (e?.target?.id) {
+          const targetIndex = parseInt(e.target.id.split("-")[1]);
+          image =
+            targetIndex === 0
+              ? loadedImage
+              : loadedSupplementaryImages[targetIndex - 1];
+        } else {
+          image =
+            index === 0 ? loadedImage : loadedSupplementaryImages[index - 1];
+        }
+
+        if (!reference) {
+          // Create and append a new canvas if it doesn't exist
+          reference = document.createElement("canvas");
+          reference.id = canvasId;
+          reference.style.margin = "10px";
+          container.appendChild(reference);
+        }
+
         const ctx = reference.getContext("2d");
         ctx.imageSmoothingEnabled = false;
-        ctx.clearRect(0, 0, reference.width, reference.height); // Clear canvas
-        reference.width = loadedImage.width * 2;
-        reference.height = loadedImage.height * 2;
+        ctx.clearRect(0, 0, reference.width, reference.height);
+        reference.width = image.width * 2;
+        reference.height = image.height * 2;
         ctx.font = "16px Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -992,27 +1121,29 @@
         const val = 32;
         const halfVal = val / 2;
 
-        if (!e && referenceCanvasArray === null)
-          referenceCanvasArray = Array.from(
+        // Initialize referenceCanvasArrays for the canvas
+        if (!e && !referenceCanvasArrays[index]) {
+          referenceCanvasArrays[index] = Array.from(
             { length: reference.height / val },
             () => Array.from({ length: reference.width / val }, () => false)
           );
+        }
 
         if (e && e.type === "click") {
           const cursorX = e.offsetX;
           const cursorY = e.offsetY;
           const x = Math.floor(cursorX / val);
           const y = Math.floor(cursorY / val);
-          referenceCanvasArray[y][x] = !referenceCanvasArray[y][x];
+          referenceCanvasArrays[index][y][x] =
+            !referenceCanvasArrays[index][y][x];
         }
-        // draw the reference
-        ctx.drawImage(loadedImage, 0, 0, reference.width, reference.height);
-        console.log("!");
-        // place incrementing numbers
+
+        ctx.drawImage(image, 0, 0, reference.width, reference.height);
+
         let number = 1;
         for (let y = 0; y < reference.height; y += val) {
           for (let x = 0; x < reference.width; x += val) {
-            if (referenceCanvasArray[y / val][x / val]) {
+            if (referenceCanvasArrays[index][y / val][x / val]) {
               ctx.fillStyle = "rgba(255,0,0,0.67)";
               ctx.fillRect(x, y, val, val);
               ctx.fillStyle = "black";
@@ -1024,10 +1155,13 @@
             ctx.fillStyle = currentColour;
           }
         }
-        // add an event listener
-        if (reference.eventListenerCount)
-          reference.removeEventListener("click", generateReference);
-        reference.addEventListener("click", generateReference);
+
+        if (!reference.eventListenerCount) {
+          reference.addEventListener("click", (event) =>
+            generateReference(event, index)
+          );
+          reference.eventListenerCount = true; // Custom flag to prevent multiple listeners
+        }
       };
 
       const toggleAutoUpdate = (e) => {
@@ -1090,8 +1224,8 @@
         const content = textarea.value;
         localStorage.setItem("jsonValues", content);
         localStorage.setItem(
-          "referenceCanvasArray",
-          JSON.stringify(referenceCanvasArray)
+          "referenceCanvasArrays",
+          JSON.stringify(referenceCanvasArrays)
         );
         showNotification("Saved tileset page array to local storage!");
       };
@@ -1099,15 +1233,18 @@
       const loadTextarea = (e) => {
         const textarea = document.getElementById("jsonValues");
         const content = localStorage.getItem("jsonValues");
-        referenceCanvasArray = JSON.parse(
-          localStorage.getItem("referenceCanvasArray")
+        referenceCanvasArrays = JSON.parse(
+          localStorage.getItem("referenceCanvasArrays")
         );
         if (!content)
           return showNotification(
             "You haven't saved anything in your local storage!"
           );
         textarea.value = content;
-        generateReference();
+        generateReference(null, 0);
+        for (let i = 0; i < loadedSupplementaryImages.length; i++) {
+          generateReference(null, i + 1);
+        }
         loadElements(false);
         showNotification("Loaded tileset page array from local storage!");
       };
