@@ -374,10 +374,10 @@
         </h2>
         <div
           style="
-            display: flex;
-            justify-content: center;
-            flex-direction: row;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: 1fr;
+            justify-items: center;
+            align-items: center;
           "
           id="canvas-container"
         ></div>
@@ -1140,7 +1140,7 @@
 
         ctx.drawImage(image, 0, 0, reference.width, reference.height);
 
-        let number = 1;
+        let number = 0;
         for (let y = 0; y < reference.height; y += val) {
           for (let x = 0; x < reference.width; x += val) {
             if (referenceCanvasArrays[index][y / val][x / val]) {
