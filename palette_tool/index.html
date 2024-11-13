@@ -124,7 +124,7 @@
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      background-color: #2ecc71;
+      background-color: #2e80cc;
       color: white;
       padding: 10px 20px;
       border-radius: 5px;
@@ -134,6 +134,14 @@
       transition: opacity 0.35s ease-in-out;
       z-index: 9999;
     }
+
+    .cpy-str {
+      background-color: #0b8be0;
+      display: none;
+    }
+    .cpy-str:hover {
+      background-color: #0b6ee0;
+    }
   </style>
 
   <head>
@@ -142,15 +150,16 @@
     <title>Image and Map Color Extractor</title>
   </head>
   <body>
-    <h1>SMC Image Palette String Extractor</h1>
+    <h1>SMC Palette Tool</h1>
     <i style="color: #838383; text-align: center; width: 100%; display: block"
       >By MrGerund (The Flying Dutchman)</i
     ><br />
+    <h2>Image Palette String Extractor</h2>
     This tool is used to generate palette strings for the implementation of
     tilesets, backgrounds, etc. in Super Mario Construct.<br />
     Palette strings in the source code can be found inside of the JSON files
     within <u>"SMC-game/files/Palettes"</u>.<br />
-    <h2>Select an upload type</h2>
+    <h3>Select an upload type</h3>
     <button id="imageUploadButton">Extract from image</button>
     <button id="mapUploadButton">Extract in bulk from folder</button
     ><br /><br />
@@ -166,7 +175,7 @@
     </div>
 
     <label for="disableCoordReference">
-      <h2>Configure & run</h2>
+      <h3>Configure & run</h3>
 
       The first image is always used as a reference for the coordinates of the
       colours. Making sure ALL images have the same amount of RGB values in
@@ -189,7 +198,36 @@
       <br />
       <button onclick="copyToClipboard()">Copy</button>
     </div>
+    <hr />
+    <h2>Palette String Index Matcher</h2>
+    Does your tileset have multiple tilemaps with different palettes?<br />This
+    tool serves to relocate matching base colours to the sane index, then
+    relocate the following colours at the same index.<br />You won't need to use
+    this tool if you only use 1 palette string NOR if you have incomplete
+    palette strings.<br />
 
+    <h3>Input your palette strings</h3>
+    <form onsubmit="rearrangeStrings(event)">
+      <textarea
+        rows="10"
+        cols="100"
+        placeholder="Paste your first palette string here"
+        id="text-1"
+      ></textarea
+      ><br />
+      <textarea
+        rows="10"
+        cols="100"
+        placeholder="Paste your second palette string here"
+        id="text-2"
+      ></textarea
+      ><br />
+      <div style="display: flex; gap: 10px">
+        <button>Rearrange</button><button class="cpy-str">Copy first</button
+        ><button class="cpy-str">Copy second</button>
+      </div>
+    </form>
+    <br />
     <script>
       const fileInput = document.getElementById("fileInput");
       const runButton = document.getElementById("runButton");
@@ -368,6 +406,107 @@
             };
 
             reader.readAsDataURL(file);
+          });
+        });
+      };
+    </script>
+    <script>
+      const rearrangeStrings = (e) => {
+        e.preventDefault();
+
+        // Access the form element
+        const form = e.target;
+
+        // Get all textarea elements within the form
+        const textareas = form.querySelectorAll("textarea");
+
+        // Extract the values of the textareas
+        const firstString = textareas[0].value;
+        const secondString = textareas[1].value;
+        // turn into array
+        const firstArray = firstString
+          .replace(/"/g, "")
+          .split(" -- ")
+          .map((subStr) => subStr?.split(" | "));
+        const secondArray = secondString
+          .replace(/"/g, "")
+          .split(" -- ")
+          .map((subStr) => subStr?.split(" | "));
+
+        // input must be valid
+        if (!firstArray.length)
+          return showNotification("The first palette string is invalid.");
+        if (!secondArray.length)
+          return showNotification("The second palette string is invalid.");
+
+        const firstLength = firstArray[0].length;
+        const secondLength = secondArray[0].length;
+
+        // subarray must be same length
+        if (!firstArray.every((subArray) => subArray.length === firstLength))
+          return showNotification(
+            "Not all palettes have the same amount of colours in the first palette string."
+          );
+        if (!secondArray.every((subArray) => subArray.length === secondLength))
+          return showNotification(
+            "Not all palettes have the same amount of colours in the second palette string."
+          );
+
+        // create arrays with numbers ranging from 0 to length
+        const indicesArray1 = [...new Array(firstLength)].map((_, i) => i);
+        const indicesArray2 = [...new Array(secondLength)].map((_, i) => i);
+        // match index storage
+        const matchingIndices1 = [];
+        const matchingIndices2 = [];
+
+        // look for matches
+        firstArray[0].forEach((value, index) => {
+          const matchIndex = secondArray[0].indexOf(value);
+          if (matchIndex !== -1) {
+            matchingIndices1.push(index); // Store index in first array
+            matchingIndices2.push(matchIndex); // Store index in second array
+          }
+        });
+
+        // filter them from the arrays
+        const filteredIndicesArray1 = indicesArray1.filter(
+          (index) => !matchingIndices1.includes(index)
+        );
+        const filteredIndicesArray2 = indicesArray2.filter(
+          (index) => !matchingIndices2.includes(index)
+        );
+
+        // create an index reference for both
+        const refArr1 = [...matchingIndices1, ...filteredIndicesArray1];
+        const refArr2 = [...matchingIndices2, ...filteredIndicesArray2];
+
+        // rearrange all arrays within the 2 arrays
+        const arr1 = firstArray.map((subArray) =>
+          refArr1.map((index) => subArray[index])
+        );
+        const arr2 = secondArray.map((subArray) =>
+          refArr2.map((index) => subArray[index])
+        );
+
+        // now generate the output string
+        const turnToOutput = (arr) => {
+          const strOutput = arr
+            .map((subArray) => subArray.join(" | "))
+            .join(" -- ");
+          return `"${strOutput}"`;
+        };
+        textareas[0].value = "";
+        textareas[1].value = "";
+        textareas[0].value = turnToOutput(arr1);
+        textareas[1].value = turnToOutput(arr2);
+        // create buttons
+        document.querySelectorAll(".cpy-str").forEach((btn, index) => {
+          const type = index === 0 ? "first" : "second";
+          btn.style.display = "block";
+          btn.addEventListener("click", () => {
+            const textarea = document.getElementById("text-" + (index + 1));
+            navigator.clipboard.writeText(textarea.value);
+            showNotification(`Copied ${type} palette string to clipboard!`);
           });
         });
       };

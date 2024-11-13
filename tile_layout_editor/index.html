@@ -340,11 +340,18 @@
         position<br />
         o/s/t + number - ID of the tile, which is part of an object/structure<br />
         <h3>Special characters</h3>
-        * = shorthand for currently used tilemap. (Will be used if supplementary
-        tilemap is disabled)<br />
-        # = same as the star (*), but for just the base tilemap (tilemap without
-        palette ID)<br />
-        $ = get current palette ID (empty if default palette)
+        * = shorthand for the base tilemap, only use this value for id's start
+        with o/s/t. The base tilemap is defined in the
+        <b>/layouts/object storage</b> file for your tileset, so make sure it is
+        set to the correct one. eg. the SMAS sewer tileset has the
+        tilemapBaseName value set to 1_Sewer.<br />
+        $ = get current palette ID (empty if default palette, only applies to
+        non-base tilemaps such as "SewerA" or "AirshipB")<br />
+        # = same as the star (*), but this is used for additives to the tilemap
+        in the editor. Eg. "t_SewerA_0" is written as "t_#A$_0". The # stands
+        for "Sewer" in this context, and the dollar sign grabs the currently
+        selected palette to let the game know this tile also has different
+        palettes.
         <h3>Multi tile structures</h3>
         Multi tile structures start with an "s" as described under the formats
         header, they contain multiple tile ID's per entry. When editing one,
